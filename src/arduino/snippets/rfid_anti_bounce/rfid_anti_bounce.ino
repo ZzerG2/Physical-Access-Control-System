@@ -24,7 +24,6 @@ ReadCardStates rcState = rcState_Init;
 unsigned long CurrentCard = 0;
   
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(9600);
   SPI.begin();
   mfrc522.PCD_Init();  
