@@ -1,5 +1,6 @@
 #include <SPI.h>
 #include <MFRC522.h> // библиотека "RFID".
+// #include "card_manager.h"
 #define SS_PIN 10
 #define RST_PIN 9
 #define Led1 4
@@ -326,13 +327,4 @@ void loop() {
          break;
   }
   delay(100);
-}
-void setup() {
-  // put your setup code here, to run once:
-
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
 }
