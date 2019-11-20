@@ -55,9 +55,21 @@ enum ButtonrelStates {
 };
 ButtonrelStates ButtonrelState = ButtonrelState_OFF;
 
-
-
 unsigned long CurrentCard = 0;
+
+void soft_reset()
+{
+  Serial.println("Soft Reset Start");
+  globalState = gsSimpleMode;
+  rcState = rcState_Init;
+  relState = relState_OFF;
+  CurrentCard = 0;
+  OffCard = 0;
+  g_ctr = 0;
+  c_ctr = 0;
+  new_state_event = false;
+  Serial.println("Soft Reset Done");
+}
   
 void setup() {
   pinMode(GREENLED, OUTPUT);
@@ -381,7 +393,7 @@ void good_processing()
 {
   switch (relState) {
     case relState_ON:
-      Turn_ON();
+      //Turn_ON();
       break;  
     case relState_OFF:
       Turn_OFF();
@@ -403,12 +415,25 @@ void blink_red()
   digitalWrite(REDLED,LOW);
 }
 
+void Power_OFF()
+{
+  Serial.println("Power Off Mode Begin");
+  digitalWrite(REDLED,HIGH);
+  delay(5000);
+  digitalWrite(PIN_RELAY, HIGH);
+  digitalWrite(BUTTON_RELAY, HIGH);
+  digitalWrite(REDLED,LOW);
+  soft_reset();
+  Serial.println("Power Off Mode End");
+}
+
 void Turn_OFF()
 {
   OffCard = CurrentCard;
   relState = relState_ON;
   Serial.print("State OFF->ON");
   digitalWrite(PIN_RELAY, LOW);
+  digitalWrite(BUTTON_RELAY, LOW);
   blink_green();
   return;
 }
@@ -477,12 +502,30 @@ void computer_off()
 //  return;
 //}
 
-
+#define POWER_OFF_BOUNCE_CTR 5
+void check_power_off()
+{
+  if (relState != relState_ON) {
+    delay(50);
+    return;  
+  }
+  byte ctr = 0;
+  for (byte i = 0; i < POWER_OFF_BOUNCE_CTR; i++) {
+      int rd = analogRead(VOLTAGE_PIN);
+      //Serial.print("Voltage ");
+      //Serial.println(rd);
+      if (rd <= 500) {
+        ctr += 1;
+      } 
+      delay(10);
+  }
+  if (ctr == POWER_OFF_BOUNCE_CTR) {
+    Power_OFF();
+  }
+}
 
 void loop() {
   g_ctr += 1;
-  // put your main code here, to run repeatedly:
-  computer_off();
   //computer_off2();
   switch (globalState) {
     case gsSimpleMode:
@@ -496,5 +539,5 @@ void loop() {
       Serial.println(globalState);
       break;
   }
-  delay(50);
+  check_power_off();
 }
