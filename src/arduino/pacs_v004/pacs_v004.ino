@@ -34,7 +34,7 @@ int relay_pins [MAX_RELAY_PINS] = {7,6,5,3,1};
 
 
 #define SS_PIN 10
-#define RST_PIN 9                                                                                                                                            
+#define RST_PIN 9
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 enum GlobalStates {
@@ -65,9 +65,18 @@ enum ButtonrelStates {
   ButtonrelState_ON,
   ButtonrelState_OFF
 };
+
 ButtonrelStates ButtonrelState = ButtonrelState_OFF;
 
+enum PowerStates {
+  powerState_OFF,
+  powerState_ON
+};
+
+PowerStates powerState = powerState_OFF;
+
 unsigned long CurrentCard = 0;
+
 void soft_reset()
 {
   #ifdef USE_SERIAL_DEBUG
@@ -76,6 +85,7 @@ void soft_reset()
   globalState = gsSimpleMode;
   rcState = rcState_Init;
   relState = relState_OFF;
+  powerState = powerState_OFF;
   CurrentCard = 0;
   OffCard = 0;
   g_ctr = 0;
@@ -99,7 +109,7 @@ void setup() {
   #endif
   digitalWrite(GREENLED, HIGH);
   digitalWrite(REDLED, HIGH);
-  delay(2000);
+  delay(1000);
   digitalWrite(GREENLED, LOW);
   digitalWrite(REDLED, LOW);
   for (int i = 0; i < MAX_RELAY_PINS; i++) {
@@ -464,18 +474,32 @@ void good_processing(int card_num)
   }
 }
 
+#define SHORT_BLINK_DELAY 300
+
 void blink_green()
 {
   digitalWrite(GREENLED,HIGH);
-  delay(250);
+  delay(SHORT_BLINK_DELAY);
   digitalWrite(GREENLED,LOW);
+  delay(SHORT_BLINK_DELAY);
+}
+
+void blink_green_red()
+{
+  digitalWrite(GREENLED,HIGH);
+  digitalWrite(REDLED,HIGH);
+  delay(SHORT_BLINK_DELAY);
+  digitalWrite(GREENLED,LOW);
+  digitalWrite(REDLED,LOW);
+  delay(SHORT_BLINK_DELAY);
 }
 
 void blink_red()
 {
   digitalWrite(REDLED,HIGH);
-  delay(250);
+  delay(SHORT_BLINK_DELAY);
   digitalWrite(REDLED,LOW);
+  delay(SHORT_BLINK_DELAY);
 }
 
 void Power_OFF()
@@ -566,31 +590,55 @@ void Turn_ON()
   }
   return;
 }
-//Выключение реле при выключении ПК
-void computer_off()
-{
-    if (analogRead(VOLTAGE_PIN) <= 500){
-      delay(5000);
-      for (int i = 0; i < MAX_RELAY_PINS; i++) {
-        pinMode(relay_pins[i], OUTPUT);
-        digitalWrite(relay_pins[i], RELAY_OFF);
-      }
-    }
-}
 
 #define POWER_OFF_BOUNCE_CTR 5
+#define POWER_ON_BOUNCE_CTR 5
+#define POWER_ON_VOLTAGE_THR 500
+
 void check_power_off()
 {
   if (relState != relState_ON) {
     delay(50);
     return;  
   }
+  switch (powerState) {
+    case powerState_OFF:
+      check_power_off_in_off_mode();
+      break;
+    case powerState_ON:
+      check_power_off_in_on_mode();
+      break;
+    default:
+      #ifdef USE_SERIAL_DEBUG
+        Serial.print("Unknown power state ");
+        Serial.println(powerState);
+      #endif
+      break;
+  }
+}
+
+void check_power_off_in_off_mode()
+{
+  byte ctr = 0;
+  for (byte i = 0; i < POWER_ON_BOUNCE_CTR; i++) {
+      int rd = analogRead(VOLTAGE_PIN);
+      if (rd > POWER_ON_VOLTAGE_THR) {
+        ctr += 1;
+      } 
+      delay(10);
+  }
+  if (ctr == POWER_ON_BOUNCE_CTR) {
+    powerState = powerState_ON; // todo: how to indicate?
+    blink_green_red();
+  }
+}
+
+void check_power_off_in_on_mode()
+{
   byte ctr = 0;
   for (byte i = 0; i < POWER_OFF_BOUNCE_CTR; i++) {
       int rd = analogRead(VOLTAGE_PIN);
-      //Serial.print("Voltage ");
-      //Serial.println(rd);
-      if (rd <= 500) {
+      if (rd <= POWER_ON_VOLTAGE_THR) {
         ctr += 1;
       } 
       delay(10);
@@ -602,7 +650,6 @@ void check_power_off()
 
 void loop() {
   g_ctr += 1;
-  //computer_off2();
   switch (globalState) {
     case gsSimpleMode:
       perform_simple_mode();
